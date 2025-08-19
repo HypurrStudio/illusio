@@ -20,11 +20,12 @@ export default function HomePage() {
           <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-8 items-center w-full">
             <div className="flex flex-col justify-center space-y-10">
               <div className="space-y-8">
-                <h1 className="text-5xl font-bold leading-[1.1] lg:text-6xl xl:text-7xl">
-                  Your HyperEVM Sandbox
+                <h1 className="font-bold leading-[1.1]">
+                  <span className="text-6xl lg:text-7xl xl:text-8xl">Illusio</span>
                   <br />
-                  <span className="bg-gradient-to-r from-[#17BEBB] to-[#75E6DA] bg-clip-text text-transparent">
-                    Built for All
+                  <span className="bg-gradient-to-r from-[#17BEBB] to-[#75E6DA] 
+                    bg-clip-text text-transparent text-3xl lg:text-4xl">
+                    Simulate, Trace and Fork HyperEVM
                   </span>
                 </h1>
                 
@@ -34,7 +35,7 @@ export default function HomePage() {
                 }}>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
-                    <span>Accurate Gas & Trace Analysis</span>
+                    <span>Accurate Gas & Trace Simulation</span>
                   </div>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
@@ -42,7 +43,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
-                    <span>REST API & SDK Integration</span>
+                    <span>API & SDK for Seamless Integration</span>
                   </div>
                 </div>
               </div>
