@@ -152,6 +152,7 @@ export default function SimulatorViewPage() {
             gas: trace.gas,
             gasUsed: trace.gasUsed ?? trace.gas_used, // tolerate either field
             error: trace.error || "",
+            revertReason: trace.revertReason || "",
             value: trace.value,
             type: trace.type,
             calls: Array.isArray(trace.calls)

@@ -309,7 +309,7 @@ export default function SummaryTab({
             {/* Error */}
             {trace.error && trace.error !== "" && (
               <div className="text-red-400 text-xs break-words">
-                error: {trace.error}
+                error: {trace.revertReason}
               </div>
             )}
           </div>

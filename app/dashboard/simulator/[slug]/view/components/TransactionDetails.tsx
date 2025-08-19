@@ -22,7 +22,7 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
     if (rootTrace.error) {
       return {
         hasError: true,
-        message: rootTrace.error
+        message: rootTrace.revertReason || rootTrace.error
       };
     }
     

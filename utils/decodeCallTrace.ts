@@ -12,6 +12,7 @@ export type RawCall = {
   input: string;          // 0x...
   output?: string;        // 0x...
   error?: string;
+  revertReason?: string;
   type?: string;
   gas?: string | number; // hex or decimal
   gasUsed?: string | number; // hex or decimal
@@ -40,6 +41,7 @@ export type DecodedNode = {
 
   children?: DecodedNode[];
   error?: string;
+  revertReason?: string;
 };
 
 export type LocalContractRecord = {
@@ -183,6 +185,7 @@ export class TraceDecoderManual {
       value: toDecString(node.value),
       type: node.type,
       error: node.error,
+      revertReason: node?.revertReason,
       inputRaw: node.input ?? "0x",
       outputRaw: node.output ?? "0x",
     };
@@ -271,6 +274,7 @@ export function decodeWholeExport(data: any): any {
     gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,
     gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,
     error: trace?.error,
+    revertReason: trace?.revertReason,
     value: trace?.value,
     calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
   });
