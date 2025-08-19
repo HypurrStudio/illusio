@@ -53,7 +53,7 @@ export default function HomePage() {
                   backgroundColor: 'var(--btn-primary-bg)',
                   color: 'var(--btn-primary-text)'
                 }}>
-                  <Link href="/dashboard/simulator">Go to Dashboard</Link>
+                  <Link href="/dashboard/simulator/v1">Go to Dashboard</Link>
                 </Button>
               </div>
             </div>
