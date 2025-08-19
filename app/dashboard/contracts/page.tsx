@@ -168,7 +168,7 @@ export default function ContractsPage() {
                       <div className="text-lg mb-2">No simulation data found</div>
                       <div className="text-sm">Run a simulation first to see contracts</div>
                       <Button 
-                        onClick={() => window.location.href = '/dashboard/simulator'} 
+                        onClick={() => window.location.href = '/dashboard/simulator/v1'} 
                         className="mt-4 bg-purple-600 hover:bg-purple-700"
                       >
                         Go to Simulator
@@ -241,7 +241,7 @@ export default function ContractsPage() {
                       <div className="text-lg mb-2">No contracts found</div>
                       <div className="text-sm">The simulation didn't return any contracts</div>
                       <Button 
-                        onClick={() => window.location.href = '/dashboard/simulator'} 
+                        onClick={() => window.location.href = '/dashboard/simulator/v1'} 
                         className="mt-4 bg-purple-600 hover:bg-purple-700"
                       >
                         Run New Simulation

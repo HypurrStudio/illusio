@@ -6,19 +6,10 @@ import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
 export function Navbar() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
+
   const pathname = usePathname()
 
-  const connectWallet = async () => {
-    if (!isConnected) {
-      setIsConnected(true)
-      setWalletAddress("0x1234...5678")
-    } else {
-      setIsConnected(false)
-      setWalletAddress("")
-    }
-  }
+ 
 
   // Hide the button if we're on any dashboard route
   const isOnDashboard = pathname?.startsWith('/dashboard')
@@ -41,7 +32,7 @@ export function Navbar() {
       </Link>
       
       {!isOnDashboard && (
-        <Link href="/dashboard/simulator">
+        <Link href="/dashboard/simulator/v1">
           <Button 
             className="border-0 px-6 py-2 rounded-lg font-semibold transition-colors"
             style={{

@@ -13,7 +13,7 @@ export function Sidebar() {
   const subItems = [
     { href: "/dashboard/transactions",  label: "Transactions", disabled: false },
     { href: "/dashboard/contracts",     label: "Contracts", disabled: false },
-    { href: "/dashboard/simulator",     label: "Simulator", disabled: false },
+    { href: "/dashboard/simulator/v1",     label: "Simulator", disabled: false },
   ]
 
   const isActive = (href: string) => pathname === href

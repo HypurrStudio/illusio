@@ -209,7 +209,7 @@ export default function SimulatorViewPage() {
           <div className="text-red-400 text-xl mb-4">⚠️ Error</div>
           <div className="text-white mb-4">{error}</div>
           <Button
-            onClick={() => (window.location.href = "/dashboard/simulator")}
+            onClick={() => (window.location.href = "/dashboard/simulator/v1")}
             className="bg-blue-600 hover:bg-blue-700"
           >
             Go to Simulator
@@ -226,7 +226,7 @@ export default function SimulatorViewPage() {
           <div className="text-yellow-400 text-xl mb-4">⚠️ No Data</div>
           <div className="text-white">No simulation data available</div>
           <Button
-            onClick={() => (window.location.href = "/dashboard/simulator")}
+            onClick={() => (window.location.href = "/dashboard/simulator/v1")}
             className="bg-blue-600 hover:bg-blue-700 mt-4"
           >
             Run Simulation
