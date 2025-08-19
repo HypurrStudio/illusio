@@ -12,7 +12,7 @@ export function Footer() {
         <div className="flex flex-col items-center space-y-6">
           <div className="flex items-center space-x-3">
             <img src="/logo.png" alt="Hypurr Studio Logo" className="h-8 w-8" />
-            <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Hypurr Studio</span>
+            <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>HypurrStudio</span>
           </div>
           
           <div className="flex items-center space-x-6">

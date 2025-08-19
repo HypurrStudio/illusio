@@ -29,8 +29,15 @@ export function Navbar() {
       backgroundColor: 'var(--bg-primary)'
     }}>
       <Link href="/" className="flex items-center space-x-3">
-        <img src="/logo.png" alt="Hypurr Studio Logo" className="h-12 w-12" /> {/* Logo made bigger */}
-        <span className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>Hypurr Studio</span> {/* App name updated */}
+        <img src="/logo.png" alt="Hypurr Studio Logo" className="h-12 w-12" />
+        <div className="flex flex-col">
+          <span className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            illusio
+          </span>
+          <span className="text-sm text-gray-400">
+            by HypurrStudio
+          </span>
+        </div>
       </Link>
       
       {!isOnDashboard && (
