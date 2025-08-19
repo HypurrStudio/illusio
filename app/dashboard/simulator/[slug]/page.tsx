@@ -22,6 +22,7 @@ import {
   getFunctionDisplayName,
   encodeFunctionCall,
 } from "@/lib/etherscan";
+import { ethers } from "ethers";
 
 function serializeToQuery(
   form: {
@@ -164,6 +165,7 @@ export default function SimulatorPage() {
   const [inputOrigin, setInputOrigin] = useState<
     "hydrate" | "raw" | "function" | null
   >(null);
+  const [currentBlock, setCurrentBlock] = useState<number | null>(null);
 
   // Etherscan ABI
   const [contractABI, setContractABI] = useState<ContractABI | null>(null);
@@ -302,6 +304,38 @@ export default function SimulatorPage() {
     // If the function encoder wrote it, do nothing (stay on "function").
   }, [formData.input, inputOrigin]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBlock() {
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_RPC_URL as string, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "eth_blockNumber",
+            params: [],
+            id: 1,
+          }),
+        });
+        const data = await res.json();
+        if (!cancelled && data?.result) {
+          setCurrentBlock(parseInt(data.result, 16));
+        }
+      } catch {
+        // ignore – keep UI quiet if RPC is unreachable
+      }
+    }
+
+    loadBlock(); // initial
+    const t = setInterval(loadBlock, 15000); // refresh every 15s
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -336,6 +370,12 @@ export default function SimulatorPage() {
     updatedParams[index].value = value;
     setFunctionParameters(updatedParams);
   };
+
+  async function getBlockNumber(rpcUrl: string) {
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const blockNumber = await provider.getBlockNumber();
+    console.log("Current block:", blockNumber);
+  }
 
   const isLeftSideComplete =
     formData.to.trim() !== "" &&
@@ -660,16 +700,19 @@ export default function SimulatorPage() {
               </CardHeader>
               {transactionParamsExpanded && (
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label
-                        className="text-secondary"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        Block Number
-                      </Label>
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    {/* Left: label (1/3 = 4 cols) */}
+                    <Label
+                      className="col-span-3 text-secondary mb-5"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Block Number
+                    </Label>
+
+                    {/* Right: input (2/3 = 8 cols) */}
+                    <div className="col-span-8">
                       <Input
-                        placeholder="/"
+                        placeholder="Enter Block Number"
                         value={formData.blockNumber}
                         onChange={(e) =>
                           setFormData({
@@ -677,7 +720,7 @@ export default function SimulatorPage() {
                             blockNumber: e.target.value,
                           })
                         }
-                        className="border"
+                        className="border w-full"
                         disabled={!isLeftSideComplete}
                         style={{
                           backgroundColor: "var(--bg-primary)",
@@ -686,6 +729,13 @@ export default function SimulatorPage() {
                           opacity: 0.8,
                         }}
                       />
+
+                      {/* Current block directly below input */}
+                      {currentBlock !== null && (
+                        <div className="mt-1 text-white text-xs pl-3">
+                          Current block: {currentBlock.toString()}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -762,6 +812,22 @@ export default function SimulatorPage() {
                         }}
                         required
                       />
+                    </div>
+
+                    <div className="col-span-2 -mt-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            gas: "800000",
+                            gasPrice: "0",
+                          })
+                        }
+                        className="text-xs text-blue-400 hover:underline cursor-pointer"
+                      >
+                        Use default gas
+                      </button>
                     </div>
                   </div>
 
