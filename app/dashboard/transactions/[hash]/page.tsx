@@ -282,7 +282,7 @@ export default function TransactionTracePage() {
             ) : activeTab === "contracts" ? (
               <ContractsTab responseData={responseData} />
             ) : activeTab === "gas-profiler" ? (
-              <GasProfileTab responseData={responseData} />
+              <GasProfileTab responseData={responseData} decodedTraceTree={decodedTraceTree} />
             ) : activeTab === "events" ? (
               <EventsTab responseData={responseData} />
             ) : (

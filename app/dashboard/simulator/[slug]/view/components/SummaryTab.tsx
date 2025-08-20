@@ -179,6 +179,7 @@ export default function SummaryTab({
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren =
       Array.isArray(trace.children) && trace.children.length > 0;
+      
 
     return (
       <div className="space-y-2">
@@ -221,7 +222,6 @@ export default function SummaryTab({
               {!isRoot && (
                 <>
                   <span className="text-gray-400">(</span>
-                  <span className="text-orange-400">[Receiver] </span>
                   <span className="text-white break-all">
                     {getContractName(contracts, trace.from)}
                   </span>
@@ -416,6 +416,7 @@ export default function SummaryTab({
       {/* Input / Output cards (only on Summary tab) */}
       {activeTab === "summary" && (
         <div className="space-y-4">
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Input */}
             <div className="space-y-2">
