@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Plus, Sparkles } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import {
   fetchContractABI,
@@ -293,7 +293,6 @@ export default function SimulatorPage() {
     }
   }, [selectedFunction, functionParameters, contractABI]);
 
-  // replace your previous auto-raw effect with:
   useEffect(() => {
     if (!formData.input || formData.input.trim() === "") return;
 
@@ -321,7 +320,13 @@ export default function SimulatorPage() {
         });
         const data = await res.json();
         if (!cancelled && data?.result) {
-          setCurrentBlock(parseInt(data.result, 16));
+          const latestBlock = parseInt(data.result, 16);
+
+          setCurrentBlock(latestBlock);
+          setFormData((prev) => ({
+            ...prev,
+            blockNumber: prev.blockNumber || String(latestBlock), // don’t overwrite user input
+          }));
         }
       } catch {
         // ignore – keep UI quiet if RPC is unreachable
@@ -335,6 +340,51 @@ export default function SimulatorPage() {
       clearInterval(t);
     };
   }, []);
+
+  const loadExample = () => {
+   
+    const exampleInput =
+      "0xa9059cbb" +
+      "0000000000000000000000001111111111111111111111111111111111111111" +
+      "0000000000000000000000000000000000000000000000000de0b6b3a7640000";
+
+    setInputType("raw");
+    setInputOrigin("raw");
+    setSelectedFunction(null);
+    setFunctionParameters([]);
+
+    setFormData({
+      from: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      to: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606e48", // USDC (example)
+      input: exampleInput,
+      value: "0",
+      gas: "800000",
+      gasPrice: "0",
+      blockNumber: "",
+    });
+
+    // Optional: seed example overrides
+    setHypeBalanceOverrides([
+      {
+        key: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+        value: "0x56BC75E2D63100000",
+      }, // 100 ETH (wei)
+    ]);
+
+    setStateOverrideContracts([
+      {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606e48",
+        balanceOverrides: [],
+        storageOverrides: [
+          {
+            key: "0x0000000000000000000000000000000000000000000000000000000000000000",
+            value:
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+          },
+        ],
+      },
+    ]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -371,12 +421,6 @@ export default function SimulatorPage() {
     setFunctionParameters(updatedParams);
   };
 
-  async function getBlockNumber(rpcUrl: string) {
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const blockNumber = await provider.getBlockNumber();
-    console.log("Current block:", blockNumber);
-  }
-
   const isLeftSideComplete =
     formData.to.trim() !== "" &&
     ((inputType === "function" && selectedFunction) ||
@@ -385,8 +429,23 @@ export default function SimulatorPage() {
   // ---------------- Render ----------------
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-2">
+      <div className="mb-4 flex items-center justify-between">
         <h1 className="text-3xl font-bold">New Simulation</h1>
+
+        <Button
+          type="button"
+          onClick={loadExample}
+          variant="outline"
+          className="flex items-center gap-2"
+          style={{
+            borderColor: "var(--border)",
+            color: "var(--text-primary)",
+            backgroundColor: "rgba(30,30,30,0.6)",
+          }}
+        >
+          <Sparkles className="h-4 w-4" />
+          Load Example
+        </Button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -893,7 +952,7 @@ export default function SimulatorPage() {
                   {hypeBalanceExpanded ? <ChevronUp /> : <ChevronDown />}
                 </Button>
               </CardHeader>
-              {hypeBalanceExpanded && (
+              {hypeBalanceExpanded || hypeBalanceOverrides && (
                 <CardContent className="space-y-4">
                   {hypeBalanceOverrides.map((override, index) => (
                     <div key={index} className="flex items-center space-x-2">
