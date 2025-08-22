@@ -875,7 +875,7 @@ export default function SimulatorPage() {
                   className="text-primary"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  Hype Balance State
+                  HYPE Balance Override
                 </CardTitle>
                 <Button
                   type="button"
