@@ -94,6 +94,7 @@ export default function TransactionTracePage() {
             gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,           // ← add fallbacks
             gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,       // ← add fallbacks
             error: trace?.error || "",
+            revertReason: trace?.revertReason || "",
             value: trace?.value,
             type: trace?.type,
             calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
