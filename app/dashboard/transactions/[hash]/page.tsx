@@ -191,7 +191,7 @@ export default function TransactionTracePage() {
           </div>
           <div className="flex items-center justify-center gap-3">
             <Button
-              onClick={() => router.refresh()}
+              onClick={() => window.location.reload()}
               className="border-0 px-6 py-2 rounded-lg font-semibold transition-colors"
               style={{
                 backgroundColor: "var(--btn-primary-bg)",
@@ -202,7 +202,7 @@ export default function TransactionTracePage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => router.push("/transactions")}
+              onClick={() => router.push("/dashboard/transactions")}
               className="text-white hover:bg-gray-800"
             >
               Back
