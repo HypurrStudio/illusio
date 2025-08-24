@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
-
+import { Sparkles } from "lucide-react"   // ⭐ import Sparkles icon
 
 export default function TransactionsPage() {
   const [txHash, setTxHash] = useState("")
@@ -23,10 +23,15 @@ export default function TransactionsPage() {
     }
   }
 
+  const handleLoadExample = () => {
+    const exampleHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    setTxHash(exampleHash)
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-3xl font-bold mb-4">Transactions</h1>
-      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
         Enter transaction hash to see detailed view
       </p>
 
@@ -39,16 +44,34 @@ export default function TransactionsPage() {
           onKeyDown={handleKeyDown}
           className="flex-1"
         />
-        <Button 
+        {/* Search button */}
+        <Button
           onClick={handleSearch}
           className="border-0 px-6 py-2 rounded-lg font-semibold transition-colors"
           style={{
-            backgroundColor: 'var(--btn-primary-bg)',
-            color: 'var(--btn-primary-text)'
+            backgroundColor: "var(--btn-primary-bg)",
+            color: "var(--btn-primary-text)",
           }}
         >
           Search
         </Button>
+
+        {/* Load Example button */}
+        <Button
+              type="button"
+              variant="outline"
+              onClick={handleLoadExample}
+              className="h-11 px-6 py-1"
+              style={{
+                borderColor: "var(--border)",
+                color: "var(--text-primary)",
+              }}
+              title="Load a sample bundle"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Load Example
+            </Button>
+
       </div>
     </div>
   )

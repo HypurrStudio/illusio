@@ -23,6 +23,13 @@ import {
   encodeFunctionCall,
 } from "@/lib/etherscan";
 import { ethers } from "ethers";
+import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function serializeToQuery(
   form: {
@@ -960,12 +967,38 @@ export default function SimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-2 pb-2">
-                <CardTitle
-                  className="text-primary"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Hype Balance State
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Hype Balance State
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark bg
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Override account balances for simulation. For example,
+                          simulate an address having more ETH than it actually
+                          does.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="ghost"
@@ -1074,12 +1107,38 @@ export default function SimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
-                <CardTitle
-                  className="text-primary"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  State Override
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    State Override
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // your primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark background
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Manually override contract storage values for
+                          simulation. Useful for testing different blockchain
+                          states without redeploying.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="outline"
@@ -1288,12 +1347,38 @@ export default function SimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
-                <CardTitle
-                  className="text-primary"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Optional Access List
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Optional Access List
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // your primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark background
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Specify contracts and storage slots the transaction
+                          will access. Helps optimize gas and ensures accurate
+                          simulation results.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="outline"

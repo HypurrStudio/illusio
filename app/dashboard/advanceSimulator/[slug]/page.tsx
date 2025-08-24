@@ -29,6 +29,15 @@ import { useParams, useRouter } from "next/navigation";
 import { Interface } from "ethers";
 import { Switch } from "@headlessui/react";
 import ReactSwitch from "react-switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
+// add with your other lucide-react imports
+import { Sparkles } from "lucide-react";
 
 // ---------- Types ----------
 interface ContractABI {
@@ -396,6 +405,44 @@ export default function BundleSimulatorPage() {
     }));
   };
 
+  const loadExampleBundle = () => {
+    setBundleState({
+      blockNumber: currentBlock ? String(currentBlock) : "", // leave blank to mean "latest"
+      isAtomic: true,
+      transactions: [
+        {
+          ...createEmptyTransaction(),
+          from: "0x2222222222222222222222222222222222222222",
+          to: "0x778d3206374f8ac265728e18e3fe2ae6b93e4ce4",
+          input: "0x",
+          value: "1000000000000000000", // 1 ETH (wei)
+          gas: "800000",
+          gasPrice: "1000000",
+          isEditing: true, // keep editable
+          inputType: "raw",
+        },
+        {
+          ...createEmptyTransaction(),
+          from: "0x778d3206374f8ac265728e18e3fe2ae6b93e4ce4",
+          to: "0xa96CaA79eb2312DbEb0B8E93c1Ce84C98b67bF11",
+          input: "0x",
+          value: "100000000000000000", // 0.1 ETH
+          gas: "21000",
+          gasPrice: "1000000",
+          isEditing: true,
+          inputType: "raw",
+        },
+      ],
+      hypeBalanceOverrides: [
+        {
+          key: "0x778d3206374f8ac265728e18e3fe2ae6b93e4ce4",
+          value: "1000000000000000000",
+        },
+      ],
+      stateOverrideContracts: [],
+    });
+  };
+
   const moveTransaction = (id: string, direction: "up" | "down") => {
     setBundleState((prev) => {
       const transactions = [...prev.transactions];
@@ -541,10 +588,28 @@ export default function BundleSimulatorPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Transaction Bundle</h1>
-          <div className="flex items-center gap-6">
+
+          <div className="flex items-center gap-3">
+            {/* Load Example button */}
+
+            {/* existing counter */}
             <div className="text-sm text-gray-400">
               {bundleState.transactions.length} transaction(s) in bundle
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={loadExampleBundle}
+              className="h-8 px-3"
+              style={{
+                borderColor: "var(--border)",
+                color: "var(--text-primary)",
+              }}
+              title="Load a sample bundle"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Load Example
+            </Button>
           </div>
         </div>
       </div>
@@ -555,12 +620,12 @@ export default function BundleSimulatorPage() {
         <div className="flex items-center gap-2">
           <Label className="text-sm text-gray-400">Block Number:</Label>
           <Input
-            placeholder="Block number"
-            value={currentBlock || 0}
+            placeholder={currentBlock ? String(currentBlock) : "latest"}
+            value={bundleState.blockNumber ?? ""} // ← bind to bundleState
             onChange={(e) =>
               setBundleState((prev) => ({
                 ...prev,
-                blockNumber: e.target.value,
+                blockNumber: e.target.value, // ← this now reflects in the input
               }))
             }
             className="w-40 h-8 text-sm"
@@ -579,7 +644,34 @@ export default function BundleSimulatorPage() {
 
         {/* Right: Atomic Execution slider */}
         <div className="flex items-center gap-3">
-          <Label className="text-sm text-gray-400">Atomic Execution</Label>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-gray-400 flex items-center gap-1">
+              Atomic Execution
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info
+                      className="w-4 h-4 cursor-pointer"
+                      style={{ color: "#17BEBB" }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                    style={{
+                      backgroundColor: "#111", // dark bg
+                      color: "#fff", // white text
+                      border: "1px solid #333", // subtle border
+                    }}
+                  >
+                    When enabled, all transactions in the bundle must succeed
+                    together. If any transaction fails, the entire bundle is
+                    reverted. If disabled, transactions execute independently.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </Label>
+          </div>{" "}
           <ReactSwitch
             checked={bundleState.isAtomic}
             onChange={(val) =>
@@ -612,9 +704,16 @@ export default function BundleSimulatorPage() {
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{
+                        backgroundColor: "var(--color-primary)", // your primary color (#17BEBB)
+                        color: "#fff", // white text for contrast
+                      }}
+                    >
                       {index + 1}
                     </div>
+
                     <CardTitle
                       className="text-lg"
                       style={{ color: "var(--text-primary)" }}
@@ -1019,12 +1118,37 @@ export default function BundleSimulatorPage() {
                         {/* Access List (inline header + add button) */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <Label
-                              className="text-secondary"
-                              style={{ color: "var(--text-secondary)" }}
-                            >
-                              Access List (Optional)
-                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm text-gray-400 flex items-center gap-1">
+                                Access List (Optional)
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Info
+                                        className="w-4 h-4 cursor-pointer"
+                                        style={{ color: "#17BEBB" }} // your primary color
+                                      />
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                                      style={{
+                                        backgroundColor: "#111", // dark bg (same as Atomic)
+                                        color: "#fff", // white text
+                                        border: "1px solid #333", // subtle border
+                                      }}
+                                    >
+                                      Access lists pre-declare the contracts and
+                                      storage slots a transaction will touch.
+                                      They can reduce gas costs and improve
+                                      simulation accuracy. Leave empty if you
+                                      don’t need it.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </Label>
+                            </div>
+
                             <Button
                               type="button"
                               variant="outline"
@@ -1289,9 +1413,39 @@ export default function BundleSimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle style={{ color: "var(--text-primary)" }}>
-                  Global State Overrides
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    style={{ color: "var(--text-primary)" }}
+                    className="flex items-center gap-1"
+                  >
+                    Global State Overrides
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark bg
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          State overrides let you simulate a transaction with
+                          custom balances or contract storage values. Useful for
+                          testing "what-if" scenarios without changing the real
+                          chain state.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="ghost"
