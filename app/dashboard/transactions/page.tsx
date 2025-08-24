@@ -24,7 +24,7 @@ export default function TransactionsPage() {
   }
 
   const handleLoadExample = () => {
-    const exampleHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    const exampleHash = "0x6fd917807b05b721512b17d9dbeb8a8009cb333d89c746ce35343c6c2439b92a"
     setTxHash(exampleHash)
   }
 
