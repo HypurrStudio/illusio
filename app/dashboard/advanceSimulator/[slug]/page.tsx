@@ -587,7 +587,7 @@ export default function BundleSimulatorPage() {
       {/* Header with Block Number and Atomic Toggle */}
       <div className="mb-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Transaction Bundle</h1>
+          <h1 className="text-3xl font-bold">New Bundle Simulation</h1>
 
           <div className="flex items-center gap-3">
             {/* Load Example button */}
@@ -613,6 +613,10 @@ export default function BundleSimulatorPage() {
           </div>
         </div>
       </div>
+
+      <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
+        Bundle simulation executes transactions in sequence, allowing you to test complex interactions and MEV strategies.
+      </p>
 
       {/* Line 2: split left/right */}
       <div className="mt-3 mb-3 flex items-center justify-between">

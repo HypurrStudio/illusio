@@ -485,6 +485,10 @@ export default function SimulatorPage() {
         </Button>
       </div>
 
+      <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
+        Simulations run against current or archived HyperEVM state at the specified block, providing accurate gas estimates and state changes without broadcasting the transaction.
+      </p>
+
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Left Column - Contract */}
