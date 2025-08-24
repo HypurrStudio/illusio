@@ -972,7 +972,7 @@ export default function SimulatorPage() {
                     className="text-primary flex items-center gap-1"
                     style={{ color: "var(--text-primary)" }}
                   >
-                    Hype Balance Override
+                    HYPE Balance Override
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -991,7 +991,7 @@ export default function SimulatorPage() {
                           }}
                         >
                           Override account balances for simulation. For example,
-                          simulate an address having more ETH than it actually
+                          simulate an address having more HYPE than it actually
                           does.
                         </TooltipContent>
                       </Tooltip>
