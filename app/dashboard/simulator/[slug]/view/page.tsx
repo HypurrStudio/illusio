@@ -113,7 +113,19 @@ export default function SimulatorViewPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let errorMsg = `HTTP ${res.status}`;
+          try {
+            const errorBody = await res.json();
+            console.log(errorBody?.error);
+            if (errorBody?.error?.message) {
+              errorMsg += ` - ${errorBody?.error?.message}`;
+            }
+          } catch (_) {
+            // ignore if not JSON
+          }
+          throw new Error(errorMsg);
+        }
         const data = await res.json();
         if (cancelled) return;
 

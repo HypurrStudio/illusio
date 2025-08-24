@@ -489,7 +489,7 @@ export default function SummaryTab({
                           ([key, value], index) => (
                             <div key={index} className="whitespace-pre">
                               <span className="text-gray-400"> </span>
-                              <code className="text-green-300">"{key}"</code>
+                              <code className="text-green-300">"{String(key).split("_")[0]}"</code>
                               <code className="text-gray-300">: </code>
                               <code className="text-yellow-300">"</code>
                               <code className="text-blue-400">
@@ -504,7 +504,6 @@ export default function SummaryTab({
                         )}
                       </>
                     ) : null}
-                    <br />
                     <code className="text-blue-300">{`}`}</code>
                   </pre>
                 </div>
