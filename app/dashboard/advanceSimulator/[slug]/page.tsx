@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,10 +23,22 @@ import {
   Trash2,
   Edit3,
   Check,
-  X,
   Play,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { Interface } from "ethers";
+import { Switch } from "@headlessui/react";
+import ReactSwitch from "react-switch";
+
+// ---------- Types ----------
+interface ContractABI {
+  functions: EtherscanFunction[];
+}
+
+interface EtherscanFunction {
+  name: string;
+  inputs: Array<{ name: string; type: string }>;
+}
 
 interface Transaction {
   id: string;
@@ -36,12 +48,20 @@ interface Transaction {
   value: string;
   gas: string;
   gasPrice: string;
-  blockNumber: string;
   isEditing: boolean;
   inputType: "function" | "raw";
+  // ABI-related per tx
+  isLoadingABI?: boolean;
+  isVerifiedABI?: boolean | null;
+  contractABI: ContractABI | null;
+  selectedFunction: EtherscanFunction | null;
+  functionParameters: Array<{ name: string; type: string; value: string }>;
+  accessList: Array<{ address: string; storageKeys: string[] }>;
 }
 
 interface BundleState {
+  blockNumber: string;
+  isAtomic: boolean;
   transactions: Transaction[];
   hypeBalanceOverrides: Array<{ key: string; value: string }>;
   stateOverrideContracts: Array<{
@@ -49,6 +69,62 @@ interface BundleState {
     storageOverrides: Array<{ key: string; value: string }>;
   }>;
 }
+
+// ---------- Helpers ----------
+const ETHERSCAN_API = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY;
+
+const fetchContractABI = async (
+  address: string
+): Promise<ContractABI | null> => {
+  try {
+    const res = await fetch(
+      `https://api.etherscan.io/v2/api?chainid=999&module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API}`
+    );
+    const data = await res.json();
+    if (data.status !== "1") return null;
+
+    const parsed = JSON.parse(data.result);
+    const functions = parsed
+      .filter((item: any) => item.type === "function")
+      .map((func: any) => ({
+        name: func.name,
+        inputs: (func.inputs || []).map((i: any) => ({
+          name: i.name,
+          type: i.type,
+        })),
+      }));
+
+    return { functions };
+  } catch (err) {
+    console.error("Failed to fetch ABI:", err);
+    return null;
+  }
+};
+
+const getFunctionDisplayName = (func: EtherscanFunction): string => {
+  return `${func.name}(${func.inputs.map((i) => i.type).join(",")})`;
+};
+
+const encodeFunctionCall = (
+  functionName: string,
+  parameters: Array<{ name: string; type: string; value: string }>,
+  abi: ContractABI
+): string => {
+  try {
+    const full = abi.functions.find((f) => f.name === functionName);
+    if (!full) return "0x";
+    // Use full function signature to avoid overload ambiguity
+    const signature = `${full.name}(${full.inputs
+      .map((i) => i.type)
+      .join(",")})`;
+    const iface = new Interface([`function ${signature}`]);
+    const values = parameters.map((p) => p.value);
+    return iface.encodeFunctionData(signature, values);
+  } catch (err) {
+    console.error("Error encoding function call:", err);
+    return "0x";
+  }
+};
 
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
@@ -60,30 +136,46 @@ function createEmptyTransaction(): Transaction {
     from: "",
     to: "",
     input: "",
-    value: "",
+    value: "0",
     gas: "800000",
     gasPrice: "0",
-    blockNumber: "",
     isEditing: true,
     inputType: "raw",
+    isLoadingABI: false,
+    isVerifiedABI: null,
+    contractABI: null,
+    selectedFunction: null,
+    functionParameters: [],
+    accessList: [],
   };
 }
 
 function serializeBundleToQuery(bundleState: BundleState) {
   const qs = new URLSearchParams();
 
-  // Serialize transactions
+  // Basic
+  if (bundleState.blockNumber) qs.set("block", bundleState.blockNumber);
+  qs.set("atomic", bundleState.isAtomic.toString());
+
+  // Transactions — strip non-serializable / UI-only fields
   qs.set(
     "transactions",
     JSON.stringify(
-      bundleState.transactions.map((t) => ({
-        ...t,
-        isEditing: false, // Don't persist editing state
-      }))
+      bundleState.transactions.map((t) => {
+        const {
+          isEditing,
+          contractABI,
+          isLoadingABI,
+          isVerifiedABI,
+          // keep the rest
+          ...rest
+        } = t;
+        return rest;
+      })
     )
   );
 
-  // Serialize state overrides similar to original
+  // State overrides
   const stateObjects: Record<
     string,
     { balance?: string; stateDiff?: Record<string, string> }
@@ -91,7 +183,6 @@ function serializeBundleToQuery(bundleState: BundleState) {
   const ensure0x = (v: string) =>
     v?.startsWith("0x") || v?.startsWith("0X") ? v : `0x${v || "0"}`;
 
-  // balances
   for (const { key, value } of bundleState.hypeBalanceOverrides) {
     const addr = (key || "").trim();
     const bal = (value || "").trim();
@@ -100,7 +191,6 @@ function serializeBundleToQuery(bundleState: BundleState) {
     stateObjects[addr].balance = bal;
   }
 
-  // storage
   for (const c of bundleState.stateOverrideContracts) {
     const addr = (c.address || "").trim();
     if (!addr) continue;
@@ -131,23 +221,33 @@ function deserializeBundleFromQuery(
   searchParams: URLSearchParams
 ): BundleState {
   const defaultState: BundleState = {
+    blockNumber: "",
+    isAtomic: true,
     transactions: [],
     hypeBalanceOverrides: [],
     stateOverrideContracts: [],
   };
 
   try {
-    // Deserialize transactions
+    // Basic
+    defaultState.blockNumber = searchParams.get("block") || "";
+    const atomicParam = searchParams.get("atomic");
+    if (atomicParam) defaultState.isAtomic = atomicParam === "true";
+
+    // Transactions
     const transactionsParam = searchParams.get("transactions");
     if (transactionsParam) {
-      const parsedTransactions = JSON.parse(transactionsParam) as Transaction[];
-      defaultState.transactions = parsedTransactions.map((t) => ({
+      const parsed = JSON.parse(transactionsParam) as Transaction[];
+      defaultState.transactions = parsed.map((t) => ({
         ...t,
         isEditing: false,
+        isLoadingABI: false,
+        isVerifiedABI: null,
+        contractABI: null,
       }));
     }
 
-    // Deserialize state overrides
+    // State overrides
     const so = searchParams.get("stateOverrides");
     if (so) {
       const parsed = JSON.parse(so) as Record<
@@ -155,12 +255,10 @@ function deserializeBundleFromQuery(
         { balance?: string; stateDiff?: Record<string, string> }
       >;
 
-      // balances → hypeBalanceOverrides
       defaultState.hypeBalanceOverrides = Object.entries(parsed)
         .filter(([_, o]) => o.balance)
         .map(([address, o]) => ({ key: address, value: o.balance as string }));
 
-      // stateDiff → stateOverrideContracts
       const stor: Array<{
         address: string;
         storageOverrides: Array<{ key: string; value: string }>;
@@ -185,12 +283,15 @@ function deserializeBundleFromQuery(
   return defaultState;
 }
 
+// ---------- Component ----------
 export default function BundleSimulatorPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug || "bundle-v1";
 
   const [bundleState, setBundleState] = useState<BundleState>({
+    blockNumber: "",
+    isAtomic: true,
     transactions: [],
     hypeBalanceOverrides: [],
     stateOverrideContracts: [],
@@ -200,17 +301,20 @@ export default function BundleSimulatorPage() {
   const [currentBlock, setCurrentBlock] = useState<number | null>(null);
   const [globalStateExpanded, setGlobalStateExpanded] = useState(false);
 
-  // Hydrate from URL on mount
+  // Debounce timers per-transaction for ABI fetch
+  const abiTimersRef = useRef<Record<string, number | undefined>>({});
+
+  // Hydrate
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
     if ([...sp.keys()].length === 0) return;
 
-    const hydratedState = deserializeBundleFromQuery(sp);
-    setBundleState(hydratedState);
+    const hydrated = deserializeBundleFromQuery(sp);
+    setBundleState(hydrated);
   }, []);
 
-  // Update URL when state changes
+  // URL sync
   useEffect(() => {
     const t = setTimeout(() => {
       const qs = serializeBundleToQuery(bundleState);
@@ -227,7 +331,7 @@ export default function BundleSimulatorPage() {
     return () => clearTimeout(t);
   }, [bundleState, router]);
 
-  // Fetch current block
+  // Current block
   useEffect(() => {
     let cancelled = false;
 
@@ -245,7 +349,15 @@ export default function BundleSimulatorPage() {
         });
         const data = await res.json();
         if (!cancelled && data?.result) {
-          setCurrentBlock(parseInt(data.result, 16));
+          const latestBlock = parseInt(data.result, 16);
+          setCurrentBlock(latestBlock);
+
+          if (!bundleState.blockNumber) {
+            setBundleState((prev) => ({
+              ...prev,
+              blockNumber: String(latestBlock),
+            }));
+          }
         }
       } catch {
         // ignore
@@ -258,8 +370,9 @@ export default function BundleSimulatorPage() {
       cancelled = true;
       clearInterval(t);
     };
-  }, []);
+  }, [bundleState.blockNumber]);
 
+  // ------- State updaters -------
   const addTransaction = () => {
     setBundleState((prev) => ({
       ...prev,
@@ -307,6 +420,89 @@ export default function BundleSimulatorPage() {
     });
   };
 
+  // ABI fetching (per transaction)
+  const fetchABIForTransaction = async (
+    transactionId: string,
+    contractAddress: string
+  ) => {
+    const addr = contractAddress.trim();
+    if (!addr) {
+      updateTransaction(transactionId, {
+        isLoadingABI: false,
+        isVerifiedABI: null,
+        contractABI: null,
+        selectedFunction: null,
+        functionParameters: [],
+      });
+      return;
+    }
+
+    updateTransaction(transactionId, {
+      isLoadingABI: true,
+      isVerifiedABI: null,
+      contractABI: null,
+      selectedFunction: null,
+      functionParameters: [],
+    });
+
+    const abi = await fetchContractABI(addr);
+    updateTransaction(transactionId, {
+      isLoadingABI: false,
+      isVerifiedABI: !!abi,
+      contractABI: abi,
+      selectedFunction: null,
+      functionParameters: [],
+    });
+  };
+
+  const handleFunctionSelect = (
+    transactionId: string,
+    functionName: string
+  ) => {
+    const tx = bundleState.transactions.find((t) => t.id === transactionId);
+    if (tx?.contractABI) {
+      const func = tx.contractABI.functions.find(
+        (f) => f.name === functionName
+      );
+      if (func) {
+        const params = func.inputs.map((input, index) => ({
+          name: input.name || `param${index}`,
+          type: input.type,
+          value: "",
+        }));
+        updateTransaction(transactionId, {
+          selectedFunction: func,
+          functionParameters: params,
+        });
+      }
+    }
+  };
+
+  const handleParameterChange = (
+    transactionId: string,
+    paramIndex: number,
+    value: string
+  ) => {
+    const tx = bundleState.transactions.find((t) => t.id === transactionId);
+    if (!tx) return;
+
+    const updatedParams = [...tx.functionParameters];
+    updatedParams[paramIndex].value = value;
+
+    // update params
+    updateTransaction(transactionId, { functionParameters: updatedParams });
+
+    // re-encode input
+    if (tx.selectedFunction && tx.contractABI) {
+      const encodedInput = encodeFunctionCall(
+        tx.selectedFunction.name,
+        updatedParams,
+        tx.contractABI
+      );
+      updateTransaction(transactionId, { input: encodedInput });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (bundleState.transactions.length === 0) {
@@ -318,6 +514,7 @@ export default function BundleSimulatorPage() {
     try {
       const qs = serializeBundleToQuery(bundleState);
       const slug = "v1";
+      // keep your route (change if your view page differs)
       router.push(
         `/dashboard/advanceSimulator/${encodeURIComponent(slug)}/view?${qs}`
       );
@@ -333,7 +530,6 @@ export default function BundleSimulatorPage() {
     if (!address || address.length <= startChars + endChars) return address;
     return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
   };
-
   const truncateData = (data: string, maxChars = 10) => {
     if (!data || data.length <= maxChars) return data;
     return `${data.slice(0, maxChars)}...`;
@@ -341,16 +537,62 @@ export default function BundleSimulatorPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
+      {/* Header with Block Number and Atomic Toggle */}
       <div className="mb-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Bundle Transaction</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">
-                {bundleState.transactions.length} transaction(s) in bundle
-              </span>
+          <h1 className="text-3xl font-bold">Transaction Bundle</h1>
+          <div className="flex items-center gap-6">
+            <div className="text-sm text-gray-400">
+              {bundleState.transactions.length} transaction(s) in bundle
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Line 2: split left/right */}
+      <div className="mt-3 mb-3 flex items-center justify-between">
+        {/* Left: Block Number + Current */}
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-gray-400">Block Number:</Label>
+          <Input
+            placeholder="Block number"
+            value={currentBlock || 0}
+            onChange={(e) =>
+              setBundleState((prev) => ({
+                ...prev,
+                blockNumber: e.target.value,
+              }))
+            }
+            className="w-40 h-8 text-sm"
+            style={{
+              backgroundColor: "var(--bg-primary)",
+              borderColor: "var(--border)",
+              color: "var(--text-primary)",
+            }}
+          />
+          {currentBlock && (
+            <span className="text-xs text-gray-400">
+              Current: {currentBlock}
+            </span>
+          )}
+        </div>
+
+        {/* Right: Atomic Execution slider */}
+        <div className="flex items-center gap-3">
+          <Label className="text-sm text-gray-400">Atomic Execution</Label>
+          <ReactSwitch
+            checked={bundleState.isAtomic}
+            onChange={(val) =>
+              setBundleState((prev) => ({ ...prev, isAtomic: val }))
+            }
+            onColor="#17BEBB" // teal ribbon when ON
+            offColor="#6B7280" // gray when OFF
+            uncheckedIcon={false}
+            checkedIcon={false}
+            handleDiameter={20}
+            height={24}
+            width={46}
+          />
         </div>
       </div>
 
@@ -370,7 +612,7 @@ export default function BundleSimulatorPage() {
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 bg-[#17BEBB] rounded-full flex items-center justify-center text-xs font-bold">
+                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
                       {index + 1}
                     </div>
                     <CardTitle
@@ -425,7 +667,7 @@ export default function BundleSimulatorPage() {
                   {transaction.isEditing ? (
                     // Edit Mode
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label
                             className="text-secondary mb-2 block"
@@ -459,12 +701,255 @@ export default function BundleSimulatorPage() {
                           >
                             To
                           </Label>
+                          <div className="relative">
+                            <Input
+                              placeholder="0x..."
+                              value={transaction.to}
+                              onChange={(e) => {
+                                const newAddr = e.target.value;
+                                updateTransaction(transaction.id, {
+                                  to: newAddr,
+                                });
+
+                                // Debounce per tx id
+                                const id = transaction.id;
+                                if (abiTimersRef.current[id]) {
+                                  clearTimeout(abiTimersRef.current[id]);
+                                }
+                                abiTimersRef.current[id] = window.setTimeout(
+                                  () => {
+                                    fetchABIForTransaction(id, newAddr);
+                                  },
+                                  600
+                                );
+                              }}
+                              className="border"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                              required
+                            />
+                            {/* inline loader at right */}
+                            {transaction.isLoadingABI && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          {/* verified / not verified hint */}
+                          {transaction.to.trim() &&
+                            !transaction.isLoadingABI && (
+                              <>
+                                {transaction.isVerifiedABI === true && (
+                                  <p className="text-xs text-green-400 mt-1">
+                                    ✓ Contract verified — functions loaded
+                                  </p>
+                                )}
+                                {transaction.isVerifiedABI === false && (
+                                  <p className="text-xs text-yellow-400 mt-1">
+                                    ⚠ Contract not verified or ABI not found
+                                  </p>
+                                )}
+                              </>
+                            )}
+                        </div>
+                      </div>
+
+                      {/* Function/Raw Input Selection */}
+                      {transaction.to.trim() && (
+                        <div className="space-y-4">
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={`function-${transaction.id}`}
+                                name={`inputType-${transaction.id}`}
+                                checked={transaction.inputType === "function"}
+                                onChange={() =>
+                                  updateTransaction(transaction.id, {
+                                    inputType: "function",
+                                  })
+                                }
+                                style={{ accentColor: "var(--color-primary)" }}
+                              />
+                              <Label
+                                htmlFor={`function-${transaction.id}`}
+                                className="text-secondary"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                Choose function and parameters
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={`raw-${transaction.id}`}
+                                name={`inputType-${transaction.id}`}
+                                checked={transaction.inputType === "raw"}
+                                onChange={() =>
+                                  updateTransaction(transaction.id, {
+                                    inputType: "raw",
+                                  })
+                                }
+                                style={{ accentColor: "var(--color-primary)" }}
+                              />
+                              <Label
+                                htmlFor={`raw-${transaction.id}`}
+                                className="text-secondary"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                Enter raw input data
+                              </Label>
+                            </div>
+                          </div>
+
+                          {transaction.inputType === "function" && (
+                            <div>
+                              <Label
+                                className="text-secondary mb-2 block"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                Select function
+                              </Label>
+                              {transaction.contractABI ? (
+                                <Select
+                                  onValueChange={(value) =>
+                                    handleFunctionSelect(transaction.id, value)
+                                  }
+                                >
+                                  <SelectTrigger
+                                    className="border"
+                                    style={{
+                                      backgroundColor: "var(--bg-primary)",
+                                      borderColor: "var(--border)",
+                                      color: "var(--text-primary)",
+                                      opacity: 0.8,
+                                    }}
+                                  >
+                                    <SelectValue placeholder="Select a function" />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    className="border"
+                                    style={{
+                                      backgroundColor: "var(--bg-primary)",
+                                      borderColor: "var(--border)",
+                                      color: "var(--text-primary)",
+                                    }}
+                                  >
+                                    {transaction.contractABI.functions.map(
+                                      (func, i) => (
+                                        <SelectItem key={i} value={func.name}>
+                                          {getFunctionDisplayName(func)}
+                                        </SelectItem>
+                                      )
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div
+                                  className="p-3 border rounded text-sm text-gray-400"
+                                  style={{
+                                    backgroundColor: "var(--bg-primary)",
+                                    borderColor: "var(--border)",
+                                  }}
+                                >
+                                  Enter a verified contract address to load
+                                  functions
+                                </div>
+                              )}
+
+                              {transaction.selectedFunction &&
+                                transaction.functionParameters.length > 0 && (
+                                  <div className="mt-4">
+                                    <Label
+                                      className="text-secondary mb-2 block"
+                                      style={{ color: "var(--text-secondary)" }}
+                                    >
+                                      Function Parameters
+                                    </Label>
+                                    <div className="space-y-2">
+                                      {transaction.functionParameters.map(
+                                        (param, paramIndex) => (
+                                          <div key={paramIndex}>
+                                            <Label className="text-xs text-gray-400 block mb-1">
+                                              {param.name} ({param.type})
+                                            </Label>
+                                            <Input
+                                              placeholder={`Enter ${param.name}`}
+                                              value={param.value}
+                                              onChange={(e) =>
+                                                handleParameterChange(
+                                                  transaction.id,
+                                                  paramIndex,
+                                                  e.target.value
+                                                )
+                                              }
+                                              className="border text-sm"
+                                              style={{
+                                                backgroundColor:
+                                                  "var(--bg-primary)",
+                                                borderColor: "var(--border)",
+                                                color: "var(--text-primary)",
+                                                opacity: 0.8,
+                                              }}
+                                            />
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                          )}
+
+                          {transaction.inputType === "raw" && (
+                            <div>
+                              <Label
+                                className="text-secondary mb-2 block"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                Raw input data
+                              </Label>
+                              <Textarea
+                                placeholder="Enter raw input data (hex format)"
+                                value={transaction.input}
+                                onChange={(e) =>
+                                  updateTransaction(transaction.id, {
+                                    input: e.target.value,
+                                  })
+                                }
+                                className="border"
+                                style={{
+                                  backgroundColor: "var(--bg-primary)",
+                                  borderColor: "var(--border)",
+                                  color: "var(--text-primary)",
+                                  opacity: 0.8,
+                                  minHeight: "80px",
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row B: Gas and Gas Price on one line */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label
+                            className="text-secondary mb-2 block"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
+                            Gas
+                          </Label>
                           <Input
-                            placeholder="0x..."
-                            value={transaction.to}
+                            placeholder="800000"
+                            value={transaction.gas}
                             onChange={(e) =>
                               updateTransaction(transaction.id, {
-                                to: e.target.value,
+                                gas: e.target.value,
                               })
                             }
                             className="border"
@@ -474,38 +959,38 @@ export default function BundleSimulatorPage() {
                               color: "var(--text-primary)",
                               opacity: 0.8,
                             }}
-                            required
+                          />
+                        </div>
+
+                        <div>
+                          <Label
+                            className="text-secondary mb-2 block"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
+                            Gas Price
+                          </Label>
+                          <Input
+                            placeholder="0"
+                            value={transaction.gasPrice}
+                            onChange={(e) =>
+                              updateTransaction(transaction.id, {
+                                gasPrice: e.target.value,
+                              })
+                            }
+                            className="border"
+                            style={{
+                              backgroundColor: "var(--bg-primary)",
+                              borderColor: "var(--border)",
+                              color: "var(--text-primary)",
+                              opacity: 0.8,
+                            }}
                           />
                         </div>
                       </div>
 
-                      <div>
-                        <Label
-                          className="text-secondary mb-2 block"
-                          style={{ color: "var(--text-secondary)" }}
-                        >
-                          Input Data
-                        </Label>
-                        <Textarea
-                          placeholder="Enter input data (hex format)"
-                          value={transaction.input}
-                          onChange={(e) =>
-                            updateTransaction(transaction.id, {
-                              input: e.target.value,
-                            })
-                          }
-                          className="border"
-                          style={{
-                            backgroundColor: "var(--bg-primary)",
-                            borderColor: "var(--border)",
-                            color: "var(--text-primary)",
-                            opacity: 0.8,
-                            minHeight: "80px",
-                          }}
-                        />
-                      </div>
-
+                      {/* Row A: Value (left) and Access List (right) on one line (50/50) */}
                       <div className="grid grid-cols-2 gap-4">
+                        {/* Value */}
                         <div>
                           <Label
                             className="text-secondary mb-2 block"
@@ -531,29 +1016,171 @@ export default function BundleSimulatorPage() {
                           />
                         </div>
 
+                        {/* Access List (inline header + add button) */}
                         <div>
-                          <Label
-                            className="text-secondary mb-2 block"
-                            style={{ color: "var(--text-secondary)" }}
-                          >
-                            Gas
-                          </Label>
-                          <Input
-                            placeholder="800000"
-                            value={transaction.gas}
-                            onChange={(e) =>
-                              updateTransaction(transaction.id, {
-                                gas: e.target.value,
-                              })
-                            }
-                            className="border"
-                            style={{
-                              backgroundColor: "var(--bg-primary)",
-                              borderColor: "var(--border)",
-                              color: "var(--text-primary)",
-                              opacity: 0.8,
-                            }}
-                          />
+                          <div className="flex items-center justify-between mb-2">
+                            <Label
+                              className="text-secondary"
+                              style={{ color: "var(--text-secondary)" }}
+                            >
+                              Access List (Optional)
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const updatedAccessList = [
+                                  ...transaction.accessList,
+                                  { address: "", storageKeys: [""] },
+                                ];
+                                updateTransaction(transaction.id, {
+                                  accessList: updatedAccessList,
+                                });
+                              }}
+                              className="h-6"
+                              style={{
+                                borderColor: "var(--border)",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Contract
+                            </Button>
+                          </div>
+                          {/* Keep your existing access list cards below; no visual change requested */}
+                          {transaction.accessList.map(
+                            (accessItem, accessIndex) => (
+                              <div
+                                key={accessIndex}
+                                className="border border-gray-600 rounded-lg p-3 mb-2 space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-400">
+                                    Contract {accessIndex + 1}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const updatedAccessList =
+                                        transaction.accessList.filter(
+                                          (_, i) => i !== accessIndex
+                                        );
+                                      updateTransaction(transaction.id, {
+                                        accessList: updatedAccessList,
+                                      });
+                                    }}
+                                    className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+
+                                <Input
+                                  placeholder="Contract Address (0x...)"
+                                  value={accessItem.address}
+                                  onChange={(e) => {
+                                    const updatedAccessList = [
+                                      ...transaction.accessList,
+                                    ];
+                                    updatedAccessList[accessIndex].address =
+                                      e.target.value;
+                                    updateTransaction(transaction.id, {
+                                      accessList: updatedAccessList,
+                                    });
+                                  }}
+                                  className="border text-sm"
+                                  style={{
+                                    backgroundColor: "var(--bg-primary)",
+                                    borderColor: "var(--border)",
+                                    color: "var(--text-primary)",
+                                    opacity: 0.8,
+                                  }}
+                                />
+
+                                {accessItem.storageKeys.map((key, keyIndex) => (
+                                  <div
+                                    key={keyIndex}
+                                    className="flex items-center space-x-2 pl-4"
+                                  >
+                                    <Input
+                                      placeholder="Storage Key (0x...)"
+                                      value={key}
+                                      onChange={(e) => {
+                                        const updatedAccessList = [
+                                          ...transaction.accessList,
+                                        ];
+                                        updatedAccessList[
+                                          accessIndex
+                                        ].storageKeys[keyIndex] =
+                                          e.target.value;
+                                        updateTransaction(transaction.id, {
+                                          accessList: updatedAccessList,
+                                        });
+                                      }}
+                                      className="border flex-1 text-sm"
+                                      style={{
+                                        backgroundColor: "var(--bg-primary)",
+                                        borderColor: "var(--border)",
+                                        color: "var(--text-primary)",
+                                        opacity: 0.8,
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const updatedAccessList = [
+                                          ...transaction.accessList,
+                                        ];
+                                        updatedAccessList[
+                                          accessIndex
+                                        ].storageKeys = updatedAccessList[
+                                          accessIndex
+                                        ].storageKeys.filter(
+                                          (_, i) => i !== keyIndex
+                                        );
+                                        updateTransaction(transaction.id, {
+                                          accessList: updatedAccessList,
+                                        });
+                                      }}
+                                      className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                                    >
+                                      ×
+                                    </Button>
+                                  </div>
+                                ))}
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const updatedAccessList = [
+                                      ...transaction.accessList,
+                                    ];
+                                    updatedAccessList[
+                                      accessIndex
+                                    ].storageKeys.push("");
+                                    updateTransaction(transaction.id, {
+                                      accessList: updatedAccessList,
+                                    });
+                                  }}
+                                  className="w-full h-6 text-xs"
+                                  style={{
+                                    borderColor: "var(--border)",
+                                    color: "var(--text-secondary)",
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Storage Key
+                                </Button>
+                              </div>
+                            )
+                          )}
                         </div>
                       </div>
 
@@ -593,9 +1220,27 @@ export default function BundleSimulatorPage() {
                             </span>
                           </div>
                           <div className="text-sm">
-                            <span className="text-gray-400">Data:</span>
+                            <span className="text-gray-400">Value:</span>
                             <span className="ml-2 font-mono text-blue-400">
                               {truncateData(transaction.input)}
+                            </span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-400">Gas:</span>
+                            <span
+                              className="ml-2 font-mono"
+                              style={{ color: "var(--text-primary)" }}
+                            >
+                              {transaction.gas}
+                            </span>
+                            <span className="text-gray-400 ml-4">
+                              Gas Price:
+                            </span>
+                            <span
+                              className="ml-2 font-mono"
+                              style={{ color: "var(--text-primary)" }}
+                            >
+                              {transaction.gasPrice}
                             </span>
                           </div>
                         </div>
@@ -1022,41 +1667,12 @@ export default function BundleSimulatorPage() {
               <div className="flex items-center space-x-2">
                 <Play className="h-5 w-5" />
                 <span>
-                  Simulate Bundle ({bundleState.transactions.length}{" "}
+                  Bundle Simulate ({bundleState.transactions.length}{" "}
                   transactions)
                 </span>
               </div>
             )}
           </Button>
-
-          {/* Info box */}
-          {bundleState.transactions.length > 0 && (
-            <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <div className="bg-blue-600 rounded-full p-1 mt-1">
-                  <svg
-                    className="w-4 h-4 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-blue-200">
-                    Bundle simulation executes transactions in sequence,
-                    allowing you to test complex interactions and MEV
-                    strategies. Use atomic mode to ensure all transactions
-                    succeed together.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </form>
     </div>
