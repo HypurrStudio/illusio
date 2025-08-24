@@ -38,6 +38,10 @@ function serializeToQuery(
   stateOverrideContracts: Array<{
     address: string;
     storageOverrides: Array<{ key: string; value: string }>;
+  }>,
+  accessList: Array<{
+    address: string;
+    storageKeys: string[];
   }>
 ) {
   // Build stateObjects like your submit path does
@@ -87,6 +91,9 @@ function serializeToQuery(
   if (Object.keys(stateObjects).length) {
     qs.set("stateOverrides", JSON.stringify(stateObjects));
   }
+  if (accessList.length > 0) {
+    qs.set("accessList", JSON.stringify(accessList));
+  }
   return qs.toString();
 }
 
@@ -106,6 +113,13 @@ function deserializeFromQuery(searchParams: URLSearchParams) {
     address: string;
     storageOverrides: Array<{ key: string; value: string }>;
   }> = [];
+  let parsedAccessList: Array<{ address: string; storageKeys: string[] }> = [];
+  const al = searchParams.get("accessList");
+  if (al) {
+    try {
+      parsedAccessList = JSON.parse(al);
+    } catch {}
+  }
 
   const so = searchParams.get("stateOverrides");
   if (so) {
@@ -141,7 +155,12 @@ function deserializeFromQuery(searchParams: URLSearchParams) {
       stateOverrideContracts = stor;
     } catch {}
   }
-  return { form, hypeBalanceOverrides, stateOverrideContracts };
+  return {
+    form,
+    hypeBalanceOverrides,
+    stateOverrideContracts,
+    accessList: parsedAccessList,
+  };
 }
 
 export default function SimulatorPage() {
@@ -190,6 +209,13 @@ export default function SimulatorPage() {
       storageOverrides: Array<{ key: string; value: string }>;
     }>
   >([]);
+  // Access List State
+  const [accessList, setAccessList] = useState<
+    Array<{
+      address: string;
+      storageKeys: string[];
+    }>
+  >([]);
 
   useEffect(() => {
     // Only hydrate if URL has meaningful params
@@ -201,7 +227,10 @@ export default function SimulatorPage() {
       form,
       hypeBalanceOverrides: balances,
       stateOverrideContracts: stor,
+      accessList: parsedAccessList,
     } = deserializeFromQuery(sp);
+
+    setAccessList(parsedAccessList);
 
     setFormData((prev) => ({ ...prev, ...form }));
     setHypeBalanceOverrides(balances);
@@ -227,7 +256,8 @@ export default function SimulatorPage() {
       const qs = serializeToQuery(
         formData,
         hypeBalanceOverrides,
-        stateOverrideContracts
+        stateOverrideContracts,
+        accessList
       );
       const nextSlug = "v1";
       // avoid infinite replaces: only replace if URL differs
@@ -342,7 +372,6 @@ export default function SimulatorPage() {
   }, []);
 
   const loadExample = () => {
-   
     const exampleInput =
       "0xa9059cbb" +
       "0000000000000000000000001111111111111111111111111111111111111111" +
@@ -393,7 +422,8 @@ export default function SimulatorPage() {
       const qs = serializeToQuery(
         formData,
         hypeBalanceOverrides,
-        stateOverrideContracts
+        stateOverrideContracts,
+        accessList
       );
       const slug = "v1";
       router.push(
@@ -952,83 +982,84 @@ export default function SimulatorPage() {
                   {hypeBalanceExpanded ? <ChevronUp /> : <ChevronDown />}
                 </Button>
               </CardHeader>
-              {hypeBalanceExpanded || hypeBalanceOverrides && (
-                <CardContent className="space-y-4">
-                  {hypeBalanceOverrides.map((override, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <Input
-                        placeholder="Address (0x...)"
-                        value={override.key}
-                        onChange={(e) => {
-                          const newOverrides = [...hypeBalanceOverrides];
-                          newOverrides[index].key = e.target.value;
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="border flex-1"
-                        style={{
-                          backgroundColor: "var(--bg-primary)",
-                          borderColor: "var(--border)",
-                          color: "var(--text-primary)",
-                          opacity: 0.8,
-                        }}
-                      />
-                      <Input
-                        placeholder="Balance (wei, hex or decimal)"
-                        value={override.value}
-                        onChange={(e) => {
-                          const newOverrides = [...hypeBalanceOverrides];
-                          newOverrides[index].value = e.target.value;
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="border flex-1"
-                        style={{
-                          backgroundColor: "var(--bg-primary)",
-                          borderColor: "var(--border)",
-                          color: "var(--text-primary)",
-                          opacity: 0.8,
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const newOverrides = hypeBalanceOverrides.filter(
-                            (_, i) => i !== index
-                          );
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setHypeBalanceOverrides([
-                        ...hypeBalanceOverrides,
-                        { key: "", value: "" },
-                      ]);
-                    }}
-                    className="w-full"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Hype Balance Override
-                  </Button>
-                </CardContent>
-              )}
+              {hypeBalanceExpanded ||
+                (hypeBalanceOverrides && (
+                  <CardContent className="space-y-4">
+                    {hypeBalanceOverrides.map((override, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Input
+                          placeholder="Address (0x...)"
+                          value={override.key}
+                          onChange={(e) => {
+                            const newOverrides = [...hypeBalanceOverrides];
+                            newOverrides[index].key = e.target.value;
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="border flex-1"
+                          style={{
+                            backgroundColor: "var(--bg-primary)",
+                            borderColor: "var(--border)",
+                            color: "var(--text-primary)",
+                            opacity: 0.8,
+                          }}
+                        />
+                        <Input
+                          placeholder="Balance (wei, hex or decimal)"
+                          value={override.value}
+                          onChange={(e) => {
+                            const newOverrides = [...hypeBalanceOverrides];
+                            newOverrides[index].value = e.target.value;
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="border flex-1"
+                          style={{
+                            backgroundColor: "var(--bg-primary)",
+                            borderColor: "var(--border)",
+                            color: "var(--text-primary)",
+                            opacity: 0.8,
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newOverrides = hypeBalanceOverrides.filter(
+                              (_, i) => i !== index
+                            );
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHypeBalanceOverrides([
+                          ...hypeBalanceOverrides,
+                          { key: "", value: "" },
+                        ]);
+                      }}
+                      className="w-full"
+                      style={{
+                        borderColor: "var(--border)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Hype Balance Override
+                    </Button>
+                  </CardContent>
+                ))}
             </Card>
 
             {/* State Override */}
@@ -1238,6 +1269,184 @@ export default function SimulatorPage() {
                 ))}
 
                 {stateOverrideContracts.length === 0 && (
+                  <div className="text-center text-gray-400 py-2">
+                    No contracts added. Click "Add Contract" to start.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Optional Access List */}
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+                opacity: isLeftSideComplete ? 1 : 0.5,
+                pointerEvents: isLeftSideComplete ? "auto" : "none",
+              }}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
+                <CardTitle
+                  className="text-primary"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Optional Access List
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setAccessList([
+                      ...accessList,
+                      { address: "", storageKeys: [""] },
+                    ]);
+                  }}
+                  className="h-6"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Contract
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {accessList.map((contract, contractIndex) => (
+                  <div
+                    key={contractIndex}
+                    className="border border-gray-600 rounded-xl p-4 mt-1 space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-white">
+                        Contract {contractIndex + 1}
+                      </h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAccessList(
+                            accessList.filter((_, i) => i !== contractIndex)
+                          );
+                        }}
+                        className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                      >
+                        ×
+                      </Button>
+                    </div>
+
+                    {/* Contract Address */}
+                    <div>
+                      <Label
+                        className="text-secondary mb-2 block"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Contract Address
+                      </Label>
+                      <Input
+                        placeholder="0x..."
+                        value={contract.address}
+                        onChange={(e) => {
+                          const updated = [...accessList];
+                          updated[contractIndex].address = e.target.value;
+                          setAccessList(updated);
+                        }}
+                        className="border"
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
+                      />
+                    </div>
+
+                    {/* Storage Keys */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label
+                          className="text-secondary"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          Storage Keys
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const updated = [...accessList];
+                            updated[contractIndex].storageKeys.push("");
+                            setAccessList(updated);
+                          }}
+                          className="h-6"
+                          style={{
+                            borderColor: "var(--border)",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Key
+                        </Button>
+                      </div>
+                      <div className="space-y-2 pl-4 border-l-2 border-gray-600">
+                        {contract.storageKeys.map((key, keyIndex) => (
+                          <div
+                            key={keyIndex}
+                            className="flex items-center space-x-2"
+                          >
+                            <Input
+                              placeholder="Storage Key (0x...)"
+                              value={key}
+                              onChange={(e) => {
+                                const updated = [...accessList];
+                                updated[contractIndex].storageKeys[keyIndex] =
+                                  e.target.value;
+                                setAccessList(updated);
+                              }}
+                              className="border flex-1"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const updated = [...accessList];
+                                updated[contractIndex].storageKeys = updated[
+                                  contractIndex
+                                ].storageKeys.filter((_, i) => i !== keyIndex);
+                                setAccessList(updated);
+                              }}
+                              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {accessList.length === 0 && (
                   <div className="text-center text-gray-400 py-2">
                     No contracts added. Click "Add Contract" to start.
                   </div>
