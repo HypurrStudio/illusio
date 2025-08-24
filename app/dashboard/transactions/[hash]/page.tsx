@@ -94,6 +94,7 @@ export default function TransactionTracePage() {
             gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,           // ← add fallbacks
             gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,       // ← add fallbacks
             error: trace?.error || "",
+            revertReason: trace?.revertReason || "",
             value: trace?.value,
             type: trace?.type,
             calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
@@ -190,7 +191,7 @@ export default function TransactionTracePage() {
           </div>
           <div className="flex items-center justify-center gap-3">
             <Button
-              onClick={() => router.refresh()}
+              onClick={() => window.location.reload()}
               className="border-0 px-6 py-2 rounded-lg font-semibold transition-colors"
               style={{
                 backgroundColor: "var(--btn-primary-bg)",
@@ -201,7 +202,7 @@ export default function TransactionTracePage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => router.push("/transactions")}
+              onClick={() => router.push("/dashboard/transactions")}
               className="text-white hover:bg-gray-800"
             >
               Back

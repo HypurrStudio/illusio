@@ -972,7 +972,7 @@ export default function SimulatorPage() {
                     className="text-primary flex items-center gap-1"
                     style={{ color: "var(--text-primary)" }}
                   >
-                    Hype Balance State
+                    Hype Balance Override
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
