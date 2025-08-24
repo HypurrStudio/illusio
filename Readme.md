@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/logo.png" alt="Illusio" width="200" />
+  <img src="./public/logo_aligned.png" alt="Illusio" width="200" />
 </p>
 
 <h1 align="center">Illusio</h1>
