@@ -29,11 +29,29 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-2xl space-y-3">
       <h1 className="text-3xl font-bold mb-4">Transactions</h1>
-      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Enter transaction hash to see detailed view
-      </p>
+
+      <div className=" flex items-center justify-between">
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          Enter transaction hash to see detailed view
+        </p>
+        
+        <Button
+          type="button"
+          onClick={handleLoadExample}
+          variant="outline"
+          className="flex items-center gap-2"
+          style={{
+            borderColor: "var(--border)",
+            color: "var(--text-primary)",
+            backgroundColor: "rgba(30,30,30,0.6)",
+          }}
+        >
+          <Sparkles className="h-4 w-4" />
+          Load Example
+        </Button>
+      </div>
 
       <div className="flex space-x-2">
         <Input
@@ -55,23 +73,6 @@ export default function TransactionsPage() {
         >
           Search
         </Button>
-
-        {/* Load Example button */}
-        <Button
-              type="button"
-              variant="outline"
-              onClick={handleLoadExample}
-              className="h-11 px-6 py-1"
-              style={{
-                borderColor: "var(--border)",
-                color: "var(--text-primary)",
-              }}
-              title="Load a sample bundle"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              Load Example
-            </Button>
-
       </div>
     </div>
   )
