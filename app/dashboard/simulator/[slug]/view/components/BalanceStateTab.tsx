@@ -47,9 +47,9 @@ export default function BalanceStateTab({
 
                 {/* Balance Change */}
                 <div className="flex items-center space-x-3">
-                  <span className="text-red-400 font-mono">{fromBalance}</span>
+                  <span className="text-red-400 font-mono">{fromBalance/1e18} HYPE</span>
                   <span className="text-gray-400">→</span>
-                  <span className="text-green-400 font-mono">{toBalance}</span>
+                  <span className="text-green-400 font-mono">{toBalance/1e18} HYPE</span>
                 </div>
               </div>
             );

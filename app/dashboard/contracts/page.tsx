@@ -242,7 +242,7 @@ export default function ContractsPage() {
                       <div className="text-sm">The simulation didn't return any contracts</div>
                       <Button 
                         onClick={() => window.location.href = '/dashboard/simulator/v1'} 
-                        className="mt-4 bg-purple-600 hover:bg-purple-700"
+                        className="mt-4 bg-[#17BEBB] hover:bg-purple-700"
                       >
                         Run New Simulation
                       </Button>

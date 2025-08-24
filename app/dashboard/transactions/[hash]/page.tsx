@@ -43,7 +43,17 @@ export default function TransactionTracePage() {
       try {
         const res = await fetch(url, { method: "GET" });
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          let errorMsg = `HTTP ${res.status}`;
+          try {
+            const errorBody = await res.json();
+            console.log(errorBody?.error);
+            if (errorBody?.error?.message) {
+              errorMsg += ` - ${errorBody?.error?.message}`;
+            }
+          } catch (_) {
+            // ignore if not JSON
+          }
+          throw new Error(errorMsg);
         }
 
         const data = await res.json();

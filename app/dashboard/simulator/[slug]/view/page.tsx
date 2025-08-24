@@ -9,7 +9,7 @@ import GasProfileTab from "./components/GasProfileTab";
 import StorageStateTab from "./components/StorageStateTab";
 import TransactionDetails from "./components/TransactionDetails";
 import EventsTab from "./components/EventsTab";
-import { RotateCcw } from "lucide-react"; // add at top
+import { RotateCcw } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -21,7 +21,6 @@ const toHex = (value?: string): string => {
   if (!s) return "0x0";
   if (s.startsWith("0x") || s.startsWith("0X")) return s;
   try {
-    // prefer bigint for large numbers
     const bi = BigInt(s);
     return "0x" + bi.toString(16);
   } catch {
@@ -84,7 +83,17 @@ export default function SimulatorViewPage() {
         // 1) Read query params
         const sp = new URLSearchParams(window.location.search);
 
-        // 2) Build request body for backend
+        // 2) Safely parse accessList if present
+        let parsedAccessList: any = undefined;
+        try {
+          parsedAccessList = sp.get("accessList")
+            ? JSON.parse(sp.get("accessList")!)
+            : undefined;
+        } catch {
+          parsedAccessList = undefined;
+        }
+
+        // 3) Build request body for backend
         const requestBody = {
           from: sp.get("from") || "",
           to: sp.get("to") || "",
@@ -94,24 +103,36 @@ export default function SimulatorViewPage() {
           gasPrice: toHex(sp.get("gasPrice") || "0"),
           generateAccessList: true,
           blockNumber: sp.get("block") ? toHex(sp.get("block")!) : "latest",
-          // stateObjects consumed directly by backend
           stateObjects: parseStateOverrides(sp),
+          accessList: parsedAccessList, // ✅ FIX: no double parse
         };
 
-        // 3) Call backend
+        // 4) Call backend
         const res = await fetch(`${BACKEND}/api/simulate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let errorMsg = `HTTP ${res.status}`;
+          try {
+            const errorBody = await res.json();
+            console.log(errorBody?.error);
+            if (errorBody?.error?.message) {
+              errorMsg += ` - ${errorBody?.error?.message}`;
+            }
+          } catch (_) {
+            // ignore if not JSON
+          }
+          throw new Error(errorMsg);
+        }
         const data = await res.json();
         if (cancelled) return;
 
-        // 4) Set response in state
+        // 5) Set response
         setResponseData(data);
 
-        // 5) Append contracts to contractsStorage (merge)
+        // 6) Cache contracts for later usage
         if (data.contracts) {
           const existing = JSON.parse(
             localStorage.getItem("contractsStorage") || "{}"
@@ -120,7 +141,7 @@ export default function SimulatorViewPage() {
           localStorage.setItem("contractsStorage", JSON.stringify(merged));
         }
 
-        // 6) Decode call trace with manual decoder (proxy-aware)
+        // 7) Decode traces
         try {
           const { TraceDecoderManual } = await import(
             "@/utils/decodeCallTrace"
@@ -143,14 +164,13 @@ export default function SimulatorViewPage() {
 
           const manual = new TraceDecoderManual(contracts);
 
-          // convert trace shape
           const convertCallTrace = (trace: any): any => ({
             from: trace.from || "",
             to: trace.to || "",
             input: trace.input || "0x",
             output: trace.output || "0x",
             gas: trace.gas,
-            gasUsed: trace.gasUsed ?? trace.gas_used, // tolerate either field
+            gasUsed: trace.gasUsed ?? trace.gas_used,
             error: trace.error || "",
             revertReason: trace.revertReason || "",
             value: trace.value,
@@ -192,6 +212,7 @@ export default function SimulatorViewPage() {
     };
   }, []);
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -203,6 +224,7 @@ export default function SimulatorViewPage() {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -220,6 +242,7 @@ export default function SimulatorViewPage() {
     );
   }
 
+  // No data state
   if (!responseData) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -276,22 +299,20 @@ export default function SimulatorViewPage() {
             const url = window.location.href.replace("/view?", "?");
             window.location.href = url;
           }}
-          
         >
           <RotateCcw className="h-4 w-4" />
           <span>Re-simulate</span>
         </Button>
       </div>
 
-      {/* Middle Simulation Details Section */}
+      {/* Simulation Details */}
       <TransactionDetails
         responseData={responseData}
         decodedTraceTree={decodedTraceTree}
       />
 
-      {/* Bottom Content Section */}
+      {/* Tabs */}
       <div className="space-y-4">
-        {/* Tabs */}
         <div
           className="flex space-x-1 border-b"
           style={{ borderColor: "var(--border)" }}
@@ -317,7 +338,7 @@ export default function SimulatorViewPage() {
           ))}
         </div>
 
-        {/* Summary Tab Content */}
+        {/* Active Tab Content */}
         {activeTab === "summary" && (
           <SummaryTab
             activeTab={activeTab}
@@ -338,7 +359,9 @@ export default function SimulatorViewPage() {
             ) : activeTab === "contracts" ? (
               <ContractsTab responseData={responseData} />
             ) : activeTab === "gas-profiler" ? (
-              <GasProfileTab responseData={responseData} decodedTraceTree={decodedTraceTree}
+              <GasProfileTab
+                responseData={responseData}
+                decodedTraceTree={decodedTraceTree}
               />
             ) : activeTab === "events" ? (
               <EventsTab responseData={responseData} />

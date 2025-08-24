@@ -35,11 +35,15 @@ export default function HomePage() {
                 }}>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
-                    <span>Accurate Gas & Trace Simulation</span>
+                    <span>Accurate Gas & Execution Traces</span>
                   </div>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
                     <span>Historical & Live State Forking</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>
+                    <span>Bundle Simulations & State Overrides</span>
                   </div>
                   <div className="flex items-center space-x-3">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }}></div>

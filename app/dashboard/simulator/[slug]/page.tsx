@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Plus, Sparkles } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import {
   fetchContractABI,
@@ -23,6 +23,13 @@ import {
   encodeFunctionCall,
 } from "@/lib/etherscan";
 import { ethers } from "ethers";
+import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function serializeToQuery(
   form: {
@@ -38,6 +45,10 @@ function serializeToQuery(
   stateOverrideContracts: Array<{
     address: string;
     storageOverrides: Array<{ key: string; value: string }>;
+  }>,
+  accessList: Array<{
+    address: string;
+    storageKeys: string[];
   }>
 ) {
   // Build stateObjects like your submit path does
@@ -87,6 +98,9 @@ function serializeToQuery(
   if (Object.keys(stateObjects).length) {
     qs.set("stateOverrides", JSON.stringify(stateObjects));
   }
+  if (accessList.length > 0) {
+    qs.set("accessList", JSON.stringify(accessList));
+  }
   return qs.toString();
 }
 
@@ -106,6 +120,13 @@ function deserializeFromQuery(searchParams: URLSearchParams) {
     address: string;
     storageOverrides: Array<{ key: string; value: string }>;
   }> = [];
+  let parsedAccessList: Array<{ address: string; storageKeys: string[] }> = [];
+  const al = searchParams.get("accessList");
+  if (al) {
+    try {
+      parsedAccessList = JSON.parse(al);
+    } catch {}
+  }
 
   const so = searchParams.get("stateOverrides");
   if (so) {
@@ -141,7 +162,12 @@ function deserializeFromQuery(searchParams: URLSearchParams) {
       stateOverrideContracts = stor;
     } catch {}
   }
-  return { form, hypeBalanceOverrides, stateOverrideContracts };
+  return {
+    form,
+    hypeBalanceOverrides,
+    stateOverrideContracts,
+    accessList: parsedAccessList,
+  };
 }
 
 export default function SimulatorPage() {
@@ -190,6 +216,13 @@ export default function SimulatorPage() {
       storageOverrides: Array<{ key: string; value: string }>;
     }>
   >([]);
+  // Access List State
+  const [accessList, setAccessList] = useState<
+    Array<{
+      address: string;
+      storageKeys: string[];
+    }>
+  >([]);
 
   useEffect(() => {
     // Only hydrate if URL has meaningful params
@@ -201,7 +234,10 @@ export default function SimulatorPage() {
       form,
       hypeBalanceOverrides: balances,
       stateOverrideContracts: stor,
+      accessList: parsedAccessList,
     } = deserializeFromQuery(sp);
+
+    setAccessList(parsedAccessList);
 
     setFormData((prev) => ({ ...prev, ...form }));
     setHypeBalanceOverrides(balances);
@@ -227,7 +263,8 @@ export default function SimulatorPage() {
       const qs = serializeToQuery(
         formData,
         hypeBalanceOverrides,
-        stateOverrideContracts
+        stateOverrideContracts,
+        accessList
       );
       const nextSlug = "v1";
       // avoid infinite replaces: only replace if URL differs
@@ -293,7 +330,6 @@ export default function SimulatorPage() {
     }
   }, [selectedFunction, functionParameters, contractABI]);
 
-  // replace your previous auto-raw effect with:
   useEffect(() => {
     if (!formData.input || formData.input.trim() === "") return;
 
@@ -321,7 +357,13 @@ export default function SimulatorPage() {
         });
         const data = await res.json();
         if (!cancelled && data?.result) {
-          setCurrentBlock(parseInt(data.result, 16));
+          const latestBlock = parseInt(data.result, 16);
+
+          setCurrentBlock(latestBlock);
+          setFormData((prev) => ({
+            ...prev,
+            blockNumber: prev.blockNumber || String(latestBlock), // don’t overwrite user input
+          }));
         }
       } catch {
         // ignore – keep UI quiet if RPC is unreachable
@@ -336,6 +378,47 @@ export default function SimulatorPage() {
     };
   }, []);
 
+  const loadExample = () => {
+    const exampleInput = "0xac9650d80000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000164c04b8d59000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000d70c9e61ba506a8cf1c25b54d14b25abdc048fd400000000000000000000000000000000000000000000000000000198db70636f0000000000000000000000000000000000000000000002434d7ec4e83e4eb045000000000000000000000000000000000000000000000000000000000bcf72350000000000000000000000000000000000000000000000000000000000000064618275f8efe54c2afa87bfb9f210a52f0ff89364000000000000000000000000000000000000000055555555555555555555555555555555555555550000000000000000000000000000000000000000b8ce59fc3717ada4c02eadf9682a9e934f625ebb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+    setInputType("raw");
+    setInputOrigin("raw");
+    setSelectedFunction(null);
+    setFunctionParameters([]);
+
+    setFormData({
+      from: "0xd70c9E61bA506a8cF1C25b54D14b25AbDc048fd4",
+      to: "0x4e73E421480a7E0C24fB3c11019254edE194f736", // SwapRouter (example)
+      input: exampleInput,
+      value: "0",
+      gas: "800000",
+      gasPrice: "100000000000",
+      blockNumber: "11971891",
+    });
+
+    // Optional: seed example overrides
+    setHypeBalanceOverrides([
+      {
+        key: "0xd70c9E61bA506a8cF1C25b54D14b25AbDc048fd4",
+        value: "0x56BC75E2D63100000",
+      }, // 100 HYPE (wei)
+    ]);
+
+    setStateOverrideContracts([
+      {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606e48",
+        balanceOverrides: [],
+        storageOverrides: [
+          {
+            key: "0x0000000000000000000000000000000000000000000000000000000000000000",
+            value:
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+          },
+        ],
+      },
+    ]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -343,7 +426,8 @@ export default function SimulatorPage() {
       const qs = serializeToQuery(
         formData,
         hypeBalanceOverrides,
-        stateOverrideContracts
+        stateOverrideContracts,
+        accessList
       );
       const slug = "v1";
       router.push(
@@ -371,12 +455,6 @@ export default function SimulatorPage() {
     setFunctionParameters(updatedParams);
   };
 
-  async function getBlockNumber(rpcUrl: string) {
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const blockNumber = await provider.getBlockNumber();
-    console.log("Current block:", blockNumber);
-  }
-
   const isLeftSideComplete =
     formData.to.trim() !== "" &&
     ((inputType === "function" && selectedFunction) ||
@@ -385,9 +463,28 @@ export default function SimulatorPage() {
   // ---------------- Render ----------------
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-2">
+      <div className="mb-4 flex items-center justify-between">
         <h1 className="text-3xl font-bold">New Simulation</h1>
+
+        <Button
+          type="button"
+          onClick={loadExample}
+          variant="outline"
+          className="flex items-center gap-2"
+          style={{
+            borderColor: "var(--border)",
+            color: "var(--text-primary)",
+            backgroundColor: "rgba(30,30,30,0.6)",
+          }}
+        >
+          <Sparkles className="h-4 w-4" />
+          Load Example
+        </Button>
       </div>
+
+      <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
+        Simulations run against current or archived HyperEVM state at the specified block, providing accurate gas estimates and state changes without broadcasting the transaction.
+      </p>
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -871,12 +968,38 @@ export default function SimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-2 pb-2">
-                <CardTitle
-                  className="text-primary"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  HYPE Balance Override
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    HYPE Balance Override
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark bg
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Override account balances for simulation. For example,
+                          simulate an address having more HYPE than it actually
+                          does.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="ghost"
@@ -893,83 +1016,84 @@ export default function SimulatorPage() {
                   {hypeBalanceExpanded ? <ChevronUp /> : <ChevronDown />}
                 </Button>
               </CardHeader>
-              {hypeBalanceExpanded && (
-                <CardContent className="space-y-4">
-                  {hypeBalanceOverrides.map((override, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <Input
-                        placeholder="Address (0x...)"
-                        value={override.key}
-                        onChange={(e) => {
-                          const newOverrides = [...hypeBalanceOverrides];
-                          newOverrides[index].key = e.target.value;
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="border flex-1"
-                        style={{
-                          backgroundColor: "var(--bg-primary)",
-                          borderColor: "var(--border)",
-                          color: "var(--text-primary)",
-                          opacity: 0.8,
-                        }}
-                      />
-                      <Input
-                        placeholder="Balance (wei, hex or decimal)"
-                        value={override.value}
-                        onChange={(e) => {
-                          const newOverrides = [...hypeBalanceOverrides];
-                          newOverrides[index].value = e.target.value;
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="border flex-1"
-                        style={{
-                          backgroundColor: "var(--bg-primary)",
-                          borderColor: "var(--border)",
-                          color: "var(--text-primary)",
-                          opacity: 0.8,
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const newOverrides = hypeBalanceOverrides.filter(
-                            (_, i) => i !== index
-                          );
-                          setHypeBalanceOverrides(newOverrides);
-                        }}
-                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setHypeBalanceOverrides([
-                        ...hypeBalanceOverrides,
-                        { key: "", value: "" },
-                      ]);
-                    }}
-                    className="w-full"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Hype Balance Override
-                  </Button>
-                </CardContent>
-              )}
+              {hypeBalanceExpanded ||
+                (hypeBalanceOverrides && (
+                  <CardContent className="space-y-4">
+                    {hypeBalanceOverrides.map((override, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Input
+                          placeholder="Address (0x...)"
+                          value={override.key}
+                          onChange={(e) => {
+                            const newOverrides = [...hypeBalanceOverrides];
+                            newOverrides[index].key = e.target.value;
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="border flex-1"
+                          style={{
+                            backgroundColor: "var(--bg-primary)",
+                            borderColor: "var(--border)",
+                            color: "var(--text-primary)",
+                            opacity: 0.8,
+                          }}
+                        />
+                        <Input
+                          placeholder="Balance (wei, hex or decimal)"
+                          value={override.value}
+                          onChange={(e) => {
+                            const newOverrides = [...hypeBalanceOverrides];
+                            newOverrides[index].value = e.target.value;
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="border flex-1"
+                          style={{
+                            backgroundColor: "var(--bg-primary)",
+                            borderColor: "var(--border)",
+                            color: "var(--text-primary)",
+                            opacity: 0.8,
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newOverrides = hypeBalanceOverrides.filter(
+                              (_, i) => i !== index
+                            );
+                            setHypeBalanceOverrides(newOverrides);
+                          }}
+                          className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHypeBalanceOverrides([
+                          ...hypeBalanceOverrides,
+                          { key: "", value: "" },
+                        ]);
+                      }}
+                      className="w-full"
+                      style={{
+                        borderColor: "var(--border)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Hype Balance Override
+                    </Button>
+                  </CardContent>
+                ))}
             </Card>
 
             {/* State Override */}
@@ -984,12 +1108,38 @@ export default function SimulatorPage() {
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
-                <CardTitle
-                  className="text-primary"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  State Override
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    State Override
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // your primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark background
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Manually override contract storage values for
+                          simulation. Useful for testing different blockchain
+                          states without redeploying.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
                 <Button
                   type="button"
                   variant="outline"
@@ -1179,6 +1329,210 @@ export default function SimulatorPage() {
                 ))}
 
                 {stateOverrideContracts.length === 0 && (
+                  <div className="text-center text-gray-400 py-2">
+                    No contracts added. Click "Add Contract" to start.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Optional Access List */}
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+                opacity: isLeftSideComplete ? 1 : 0.5,
+                pointerEvents: isLeftSideComplete ? "auto" : "none",
+              }}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
+                <div className="flex items-center gap-2">
+                  <CardTitle
+                    className="text-primary flex items-center gap-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Optional Access List
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info
+                            className="w-4 h-4 cursor-pointer"
+                            style={{ color: "#17BEBB" }} // your primary color
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-xs text-sm rounded-md px-3 py-2 shadow-md"
+                          style={{
+                            backgroundColor: "#111", // dark background
+                            color: "#fff", // white text
+                            border: "1px solid #333", // subtle border
+                          }}
+                        >
+                          Specify contracts and storage slots the transaction
+                          will access. Helps optimize gas and ensures accurate
+                          simulation results.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setAccessList([
+                      ...accessList,
+                      { address: "", storageKeys: [""] },
+                    ]);
+                  }}
+                  className="h-6"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Contract
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {accessList.map((contract, contractIndex) => (
+                  <div
+                    key={contractIndex}
+                    className="border border-gray-600 rounded-xl p-4 mt-1 space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-white">
+                        Contract {contractIndex + 1}
+                      </h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAccessList(
+                            accessList.filter((_, i) => i !== contractIndex)
+                          );
+                        }}
+                        className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                      >
+                        ×
+                      </Button>
+                    </div>
+
+                    {/* Contract Address */}
+                    <div>
+                      <Label
+                        className="text-secondary mb-2 block"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Contract Address
+                      </Label>
+                      <Input
+                        placeholder="0x..."
+                        value={contract.address}
+                        onChange={(e) => {
+                          const updated = [...accessList];
+                          updated[contractIndex].address = e.target.value;
+                          setAccessList(updated);
+                        }}
+                        className="border"
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
+                      />
+                    </div>
+
+                    {/* Storage Keys */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label
+                          className="text-secondary"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          Storage Keys
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const updated = [...accessList];
+                            updated[contractIndex].storageKeys.push("");
+                            setAccessList(updated);
+                          }}
+                          className="h-6"
+                          style={{
+                            borderColor: "var(--border)",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Key
+                        </Button>
+                      </div>
+                      <div className="space-y-2 pl-4 border-l-2 border-gray-600">
+                        {contract.storageKeys.map((key, keyIndex) => (
+                          <div
+                            key={keyIndex}
+                            className="flex items-center space-x-2"
+                          >
+                            <Input
+                              placeholder="Storage Key (0x...)"
+                              value={key}
+                              onChange={(e) => {
+                                const updated = [...accessList];
+                                updated[contractIndex].storageKeys[keyIndex] =
+                                  e.target.value;
+                                setAccessList(updated);
+                              }}
+                              className="border flex-1"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const updated = [...accessList];
+                                updated[contractIndex].storageKeys = updated[
+                                  contractIndex
+                                ].storageKeys.filter((_, i) => i !== keyIndex);
+                                setAccessList(updated);
+                              }}
+                              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {accessList.length === 0 && (
                   <div className="text-center text-gray-400 py-2">
                     No contracts added. Click "Add Contract" to start.
                   </div>
