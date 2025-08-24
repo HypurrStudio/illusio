@@ -17,7 +17,8 @@ export function Footer() {
           
           <div className="flex items-center space-x-6">
             <a 
-              href="#" 
+              href="https://x.com/hypurrstudio"
+              target='_blank'
               className="transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-primary)'}
@@ -27,7 +28,8 @@ export function Footer() {
               <Twitter className="h-6 w-6" />
             </a>
             <a 
-              href="#" 
+              href="https://github.com/HypurrStudio"
+              target='_blank'
               className="transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-primary)'}
@@ -36,30 +38,10 @@ export function Footer() {
             >
               <Github className="h-6 w-6" />
             </a>
-            <a 
-              href="#" 
-              className="transition-colors"
-              style={{ color: 'var(--text-secondary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-primary)'}
-              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-              aria-label="Discord"
-            >
-              <Discord className="h-6 w-6" />
-            </a>
-            <a 
-              href="#" 
-              className="transition-colors"
-              style={{ color: 'var(--text-secondary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-primary)'}
-              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-              aria-label="Telegram"
-            >
-              <MessageCircle className="h-6 w-6" />
-            </a>
           </div>
           
           <div className="text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-            <p>&copy; 2024 Hypurr Studio. All rights reserved.</p>
+            <p>&copy; 2025 Hypurr Studio. All rights reserved.</p>
           </div>
         </div>
       </div>
