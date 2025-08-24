@@ -1348,7 +1348,7 @@ export default function BundleSimulatorPage() {
                             </span>
                           </div>
                           <div className="text-sm">
-                            <span className="text-gray-400">Value:</span>
+                            <span className="text-gray-400">Input:</span>
                             <span className="ml-2 font-mono text-blue-400">
                               {truncateData(transaction.input)}
                             </span>
@@ -1369,6 +1369,12 @@ export default function BundleSimulatorPage() {
                               style={{ color: "var(--text-primary)" }}
                             >
                               {transaction.gasPrice}
+                            </span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-400">Value:</span>
+                            <span className="ml-2 font-mono text-blue-400">
+                              {(transaction.value)}
                             </span>
                           </div>
                         </div>

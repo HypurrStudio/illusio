@@ -84,9 +84,9 @@ export default function SummaryTab({
 
   const formatEth = (ethStr?: string) => {
     if (!ethStr) return "0 HYPE";
-    const n = Number(ethStr);
+    const n = Number(ethStr)/1e18;
     if (Number.isNaN(n)) return `${ethStr} HYPE`;
-    return `${n.toFixed(6)} HYPE`;
+    return `${n} HYPE`;
   };
 
   const functionDisplay = (trace: any) => {
@@ -300,9 +300,9 @@ export default function SummaryTab({
             )}
 
             {/* Value transfer (use valueEth/valueWei from decoder) */}
-            {trace.valueEth && trace.valueEth !== "0" ? (
+            {trace.value && trace.value !== "0" ? (
               <div className="text-gray-400 text-xs break-words">
-                value: {formatEth(trace.valueEth)}
+                value: {formatEth(trace.value)}
               </div>
             ) : null}
 
